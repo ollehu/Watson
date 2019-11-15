@@ -115,6 +115,31 @@ def format_timedelta(delta):
 
     return ('-' if neg else '') + ' '.join(stems)
 
+def visma_format_timedelta(delta):
+    seconds = int(delta.total_seconds())
+    neg = seconds < 0
+    seconds = abs(seconds)
+    total = seconds
+    stems = []
+
+    if total > 3600:
+        hours = seconds // 3600
+        stems.append(str(hours))
+        seconds -= hours * 3600
+
+    if total >= 60:
+        mins = seconds // 60
+        seconds -= mins * 60
+        if seconds >= 30:
+            mins += 1
+        mins = int(mins * 100 / 60)
+        if mins < 10:
+            mins = '0' + str(mins)
+        else:
+            mins = str(mins)
+        stems.append(',{}'.format(str(mins)))
+
+    return ('-' if neg else '') + ''.join(stems)
 
 def sorted_groupby(iterator, key, reverse=False):
     """
@@ -167,9 +192,10 @@ def get_frame_from_argument(watson, arg):
         )
 
 
-def get_start_time_for_period(period):
+def get_start_time_for_period(period, days_offset=0):
     # Using now() from datetime instead of arrow for mocking compatibility.
     now = arrow.Arrow.fromdatetime(datetime.datetime.now())
+    now = now.replace(days=-days_offset)
     date = now.date()
 
     day = date.day

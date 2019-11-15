@@ -6,6 +6,7 @@ import json
 import operator
 import os
 import re
+import sys
 
 from dateutil import tz
 from functools import reduce, wraps
@@ -32,6 +33,7 @@ from .utils import (
     style,
     parse_tags,
     json_arrow_encoder,
+    visma_format_timedelta,
 )
 
 
@@ -846,6 +848,96 @@ def aggregate(ctx, watson, current, from_, to, projects, tags, output_format,
     else:
         click.echo(u'\n\n'.join(lines))
 
+@cli.command()
+@click.option('-f', '--from', 'from_', cls=MutuallyExclusiveOption, type=Date,
+              default=arrow.now().replace(days=-7),
+              mutually_exclusive=_SHORTCUT_OPTIONS,
+              help="The date from when the report should start. Defaults "
+              "to seven days ago.")
+@click.option('-t', '--to', cls=MutuallyExclusiveOption, type=Date,
+              default=arrow.now(),
+              mutually_exclusive=_SHORTCUT_OPTIONS,
+              help="The date at which the report should stop (inclusive). "
+              "Defaults to tomorrow.")
+@click.option('-l', '--last-week', 'last_week', is_flag=True,
+              help="Get last weeks visma report.")
+@click.pass_obj
+def visma_report(watson, from_, to, last_week):
+    """
+    Display a visma report of the time spent on each project per day
+    for the current week.
+    """
+
+    if last_week:
+        delay = 7
+    else:
+        delay = 0
+    week = get_start_time_for_period('week', days_offset=delay)
+
+    to = week.replace(days=+6) if last_week else to
+
+    try:
+        report = watson.visma_report(from_, to, week=week)
+    except:
+        print(sys.exc_info()[0])
+        raise
+
+    lines = []
+
+    def _print(line):
+        click.echo(line)
+
+    def _final_print(lines):
+        pass
+
+    day_reports = report['day_reports']
+    for day_report in day_reports[::-1]:
+        _print('{} (Total: {})'.format(
+            style('date', '{:ddd DD MMMM YYYY}'.format(
+                arrow.get(day_report['day'])
+                )),
+            style('time', format_timedelta(
+                datetime.timedelta(seconds=day_report['total'])
+                ))
+            )
+        )
+
+        projects = day_report['projects']
+        longest_project = max(len(project['name']) for project in projects)
+        for project in projects:
+            _print('{project} - {time} - {visma}'.format(
+                time=style('time', format_timedelta(
+                    datetime.timedelta(seconds=project['time'])
+                )),
+                project=style('project', '{:>{}}'.format(project['name'], longest_project)),
+                pad=longest_project,
+                visma=style('time', visma_format_timedelta(
+                    datetime.timedelta(seconds=project['time'])
+                    ))
+            ))
+
+            tags = project['tags']
+            if tags:
+                longest_tag = max(len(tag) for tag in tags or [''])
+
+                for tag in tags:
+                    _print('\t[{tag} {time}]'.format(
+                        time=style('time', '{:>11}'.format(format_timedelta(
+                            datetime.timedelta(seconds=tag['time'])
+                        ))),
+                        tag=style('tag', '{:<{}}'.format(
+                            tag['name'], longest_tag
+                        )),
+                    ))
+        _print("\n")
+
+    _print('Total: {}'.format(
+        style('time', '{}'.format(format_timedelta(
+            datetime.timedelta(seconds=report['time'])
+        )))
+    ))
+
+    _final_print(lines)
 
 @cli.command()
 @click.option('-c/-C', '--current/--no-current', 'current', default=None,

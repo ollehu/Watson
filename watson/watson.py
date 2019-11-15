@@ -539,6 +539,83 @@ class Watson(object):
         report['time'] = total.total_seconds()
         return report
 
+    def visma_report(self, from_, to, current=True, projects=None, tags=None,
+               year=None, month=None, week=None, day=None, all=None):
+        for start_time in (_ for _ in [day, week, month, year, all]
+                           if _ is not None):
+            from_ = start_time
+
+        if from_ > to:
+            raise WatsonError("'from' must be anterior to 'to'")
+
+        if tags is None:
+            tags = []
+
+        if self.current:
+            if current or (current is None and
+                           self.config.getboolean(
+                               'options', 'report_current')):
+                cur = self.current
+                self.frames.add(cur['project'], cur['start'], arrow.utcnow(),
+                                cur['tags'], id="current")
+
+        span = self.frames.span(from_, to)
+
+        frames_by_day = sorted_groupby(
+            self.frames.filter(
+                projects=projects or None, tags=tags or None, span=span
+            ),
+            operator.attrgetter('day'), reverse=True
+        )
+
+        total = datetime.timedelta()
+
+        report = {
+                'timespan': {
+                    'from': str(span.start),
+                    'to': str(span.stop),
+                    },
+                'day_reports': [],
+         }
+
+        for i, (day, day_frames) in enumerate(frames_by_day):
+
+            frames_by_project = sorted_groupby(
+                day_frames,
+                operator.attrgetter('project')
+            )
+
+            day_report = {
+                    'day' : day,
+                    'projects': [],
+                    'total': 0
+                    }
+
+            for project, frames in frames_by_project:
+                frames = tuple(frames)
+                delta = reduce(
+                    operator.add,
+                    (f.stop - f.start for f in frames),
+                    datetime.timedelta()
+                )
+
+                if delta.total_seconds() > 0:
+                    total += delta
+
+                    project_report = {
+                        'name': project,
+                        'time': delta.total_seconds(),
+                        'tags': []
+                    }
+
+                    day_report['projects'].append(project_report)
+                    day_report['total'] += delta.total_seconds()
+
+            report['day_reports'].append(day_report)
+
+        report['time'] = total.total_seconds()
+        return report
+
     def rename_project(self, old_project, new_project):
         """Rename a project in all affected frames."""
         if old_project not in self.projects:
