@@ -1,16 +1,10 @@
-# -*- coding: utf-8 -*-
-
 import datetime
 from functools import reduce
 import json
 import operator
 import os
 import uuid
-
-try:
-    import configparser
-except ImportError:
-    import ConfigParser as configparser
+from configparser import Error as CFGParserError
 import arrow
 import click
 
@@ -24,7 +18,7 @@ class WatsonError(RuntimeError):
     pass
 
 
-class ConfigurationError(configparser.Error, WatsonError):
+class ConfigurationError(CFGParserError, WatsonError):
     pass
 
 
@@ -89,11 +83,11 @@ class Watson(object):
                 return type()
             else:
                 raise WatsonError(
-                    u"Invalid JSON file {}: {}".format(filename, e)
+                    "Invalid JSON file {}: {}".format(filename, e)
                 )
         except Exception as e:
             raise WatsonError(
-                u"Unexpected error while loading JSON file {}: {}".format(
+                "Unexpected error while loading JSON file {}: {}".format(
                     filename, e
                 )
             )
@@ -107,7 +101,7 @@ class Watson(object):
         if not isinstance(date, arrow.Arrow):
             date = arrow.get(date)
 
-        return date.timestamp
+        return date.int_timestamp
 
     @property
     def config(self):
@@ -118,9 +112,9 @@ class Watson(object):
             try:
                 config = ConfigParser()
                 config.read(self.config_file)
-            except configparser.Error as e:
+            except CFGParserError as e:
                 raise ConfigurationError(
-                    u"Cannot parse config file: {}".format(e))
+                    "Cannot parse config file: {}".format(e))
 
             self._config = config
 
@@ -167,7 +161,7 @@ class Watson(object):
                           make_json_writer(self._format_date, self.last_sync))
         except OSError as e:
             raise WatsonError(
-                u"Impossible to write {}: {}".format(e.filename, e)
+                "Impossible to write {}: {}".format(e.filename, e)
             )
 
     @property
@@ -251,10 +245,11 @@ class Watson(object):
         frame = self.frames.add(project, from_date, to_date, tags=tags)
         return frame
 
-    def start(self, project, tags=None, restart=False, gap=True):
+    def start(self, project, tags=None, restart=False, start_at=None,
+              gap=True):
         if self.is_started:
             raise WatsonError(
-                u"Project {} is already started.".format(
+                "Project {} is already started.".format(
                     self.current['project']
                 )
             )
@@ -263,7 +258,20 @@ class Watson(object):
         if not restart:
             tags = (tags or []) + default_tags
 
+        if start_at is None:
+            start_at = arrow.now()
+        elif self.frames:
+            # Only perform this check if an explicit start time was given
+            # and previous frames exist
+            stop_of_prev_frame = self.frames[-1].stop
+            if start_at < stop_of_prev_frame:
+                raise WatsonError('Task cannot start before the previous task '
+                                  'ends.')
+        if start_at > arrow.now():
+            raise WatsonError('Task cannot start in the future.')
+
         new_frame = {'project': project, 'tags': deduplicate(tags)}
+        new_frame['start'] = start_at
         if not gap:
             stop_of_prev_frame = self.frames[-1].stop
             new_frame['start'] = stop_of_prev_frame
@@ -324,7 +332,7 @@ class Watson(object):
         token = config.get('backend', 'token')
 
         if dest and token:
-            dest = u"{}/{}/".format(
+            dest = "{}/{}/".format(
                 dest.rstrip('/'),
                 route.strip('/')
             )
@@ -356,7 +364,7 @@ class Watson(object):
                 raise WatsonError("Unable to reach the server.")
             except AssertionError:
                 raise WatsonError(
-                    u"An error occurred with the remote "
+                    "An error occurred with the remote "
                     "server: {}".format(response.json())
                 )
 
@@ -375,7 +383,7 @@ class Watson(object):
             raise WatsonError("Unable to reach the server.")
         except AssertionError:
             raise WatsonError(
-                u"An error occurred with the remote "
+                "An error occurred with the remote "
                 "server: {}".format(response.json())
             )
 
@@ -385,7 +393,7 @@ class Watson(object):
             frame_id = uuid.UUID(frame['id']).hex
             self.frames[frame_id] = (
                 frame['project'],
-                frame['start_at'],
+                frame['begin_at'],
                 frame['end_at'],
                 frame['tags']
             )
@@ -402,7 +410,7 @@ class Watson(object):
             if last_pull > frame.updated_at > self.last_sync:
                 frames.append({
                     'id': uuid.UUID(frame.id).urn,
-                    'start_at': str(frame.start.to('utc')),
+                    'begin_at': str(frame.start.to('utc')),
                     'end_at': str(frame.stop.to('utc')),
                     'project': frame.project,
                     'tags': frame.tags
@@ -415,8 +423,8 @@ class Watson(object):
             raise WatsonError("Unable to reach the server.")
         except AssertionError:
             raise WatsonError(
-                u"An error occurred with the remote server (status: {}). "
-                u"Response was:\n{}".format(
+                "An error occurred with the remote server (status: {}). "
+                "Response was:\n{}".format(
                     response.status_code,
                     response.text
                 )
@@ -451,7 +459,8 @@ class Watson(object):
 
     def report(self, from_, to, current=None, projects=None, tags=None,
                ignore_projects=None, ignore_tags=None, year=None,
-               month=None, week=None, day=None, luna=None, all=None):
+               month=None, week=None, day=None, luna=None, all=None,
+               include_partial_frames=False):
         for start_time in (_ for _ in [day, week, month, year, luna, all]
                            if _ is not None):
             from_ = start_time
@@ -481,7 +490,7 @@ class Watson(object):
                 projects=projects or None, tags=tags or None,
                 ignore_projects=ignore_projects or None,
                 ignore_tags=ignore_tags or None,
-                span=span
+                span=span, include_partial_frames=include_partial_frames,
             ),
             operator.attrgetter('project')
         )
@@ -619,7 +628,7 @@ class Watson(object):
     def rename_project(self, old_project, new_project):
         """Rename a project in all affected frames."""
         if old_project not in self.projects:
-            raise WatsonError(u'Project "%s" does not exist' % old_project)
+            raise WatsonError('Project "%s" does not exist' % old_project)
 
         updated_at = arrow.utcnow()
         # rename project
@@ -636,7 +645,7 @@ class Watson(object):
     def rename_tag(self, old_tag, new_tag):
         """Rename a tag in all affected frames."""
         if old_tag not in self.tags:
-            raise WatsonError(u'Tag "%s" does not exist' % old_tag)
+            raise WatsonError('Tag "%s" does not exist' % old_tag)
 
         updated_at = arrow.utcnow()
         # rename tag

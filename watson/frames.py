@@ -13,7 +13,7 @@ class Frame(namedtuple('Frame', HEADERS)):
             if not isinstance(start, arrow.Arrow):
                 start = arrow.get(start)
 
-            if not isinstance(stop, arrow.Arrow):
+            if stop and not isinstance(stop, arrow.Arrow):
                 stop = arrow.get(stop)
 
             if updated_at is None:
@@ -22,10 +22,12 @@ class Frame(namedtuple('Frame', HEADERS)):
                 updated_at = arrow.get(updated_at)
         except (ValueError, TypeError) as e:
             from .watson import WatsonError
-            raise WatsonError(u"Error converting date: {}".format(e))
+            raise WatsonError("Error converting date: {}".format(e))
 
         start = start.to('local')
-        stop = stop.to('local')
+
+        if stop:
+            stop = stop.to('local')
 
         if tags is None:
             tags = []
@@ -35,9 +37,9 @@ class Frame(namedtuple('Frame', HEADERS)):
         )
 
     def dump(self):
-        start = self.start.to('utc').timestamp
-        stop = self.stop.to('utc').timestamp
-        updated_at = self.updated_at.timestamp
+        start = self.start.to('utc').int_timestamp
+        stop = self.stop.to('utc').int_timestamp if self.stop else None
+        updated_at = self.updated_at.int_timestamp
 
         return (start, stop, self.project, self.id, self.tags, updated_at)
 
@@ -63,6 +65,9 @@ class Span(object):
         self.timeframe = timeframe
         self.start = start.floor(self.timeframe)
         self.stop = stop.ceil(self.timeframe)
+
+    def overlaps(self, frame):
+        return frame.start <= self.stop and frame.stop >= self.start
 
     def __contains__(self, frame):
         return frame.start >= self.start and frame.stop <= self.stop
@@ -120,7 +125,7 @@ class Frames(object):
                 i for i, v in enumerate(self['id']) if v.startswith(id)
             )
         except StopIteration:
-            raise KeyError(u"Frame with id {} not found.".format(id))
+            raise KeyError("Frame with id {} not found.".format(id))
 
     def _get_col(self, col):
         index = HEADERS.index(col)
@@ -150,17 +155,33 @@ class Frames(object):
         ignore_projects=None,
         ignore_tags=None,
         span=None,
+        include_partial_frames=False,
     ):
-        return (
-            frame for frame in self._rows
-            if (projects is None or frame.project in projects) and
-               (ignore_projects is None
-                   or frame.project not in ignore_projects) and
-               (tags is None or any(tag in frame.tags for tag in tags)) and
-               (ignore_tags is None
-                   or all(tag not in frame.tags for tag in ignore_tags)) and
-               (span is None or frame in span)
-        )
+
+        for frame in self._rows:
+            if projects is not None and frame.project not in projects:
+                continue
+            if ignore_projects is not None and\
+               frame.project in ignore_projects:
+                continue
+
+            if tags is not None and not any(tag in frame.tags for tag in tags):
+                continue
+            if ignore_tags is not None and\
+               any(tag in frame.tags for tag in ignore_tags):
+                continue
+
+            if span is None:
+                yield frame
+            elif frame in span:
+                yield frame
+            elif include_partial_frames and span.overlaps(frame):
+                # If requested, return the part of the frame that is within the
+                # span, for frames that are *partially* within span or reaching
+                # over span
+                start = span.start if frame.start < span.start else frame.start
+                stop = span.stop if frame.stop > span.stop else frame.stop
+                yield frame._replace(start=start, stop=stop)
 
     def span(self, start, stop):
         return Span(start, stop)

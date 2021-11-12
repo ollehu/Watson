@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Unit tests for the 'utils' module."""
 
 import arrow
@@ -8,15 +7,9 @@ import functools
 import json
 import os
 import datetime
-
-try:
-    from StringIO import StringIO
-except ImportError:
-    from io import StringIO
-try:
-    from unittest.mock import patch
-except ImportError:
-    from mock import patch
+import operator
+from io import StringIO
+from mock import patch
 import pytest
 from click.exceptions import Abort
 from dateutil.tz import tzutc
@@ -32,8 +25,8 @@ from watson.utils import (
     get_start_time_for_period,
     make_json_writer,
     safe_save,
+    sorted_groupby,
     parse_tags,
-    PY2,
     json_arrow_encoder,
 )
 from . import mock_datetime
@@ -102,11 +95,9 @@ def test_make_json_writer_with_kwargs():
 
 def test_make_json_writer_with_unicode():
     fp = StringIO()
-    writer = make_json_writer(lambda: {u'ùñï©ôð€': u'εvεrywhεrε'})
+    writer = make_json_writer(lambda: {'ùñï©ôð€': 'εvεrywhεrε'})
     writer(fp)
-    expected = u'{\n "ùñï©ôð€": "εvεrywhεrε"\n}'
-    if PY2:
-        expected = expected.encode('utf-8')
+    expected = '{\n "ùñï©ôð€": "εvεrywhεrε"\n}'
     assert fp.getvalue() == expected
 
 
@@ -134,7 +125,7 @@ def test_safe_save(config_dir):
     assert os.path.getmtime(save_file) >= os.path.getmtime(backup_file)
 
 
-def test_safe_save_tmpfile_on_other_filesystem(config_dir, mock):
+def test_safe_save_tmpfile_on_other_filesystem(config_dir, mocker):
     save_file = os.path.join(config_dir, 'test')
     backup_file = os.path.join(config_dir, 'test' + '.bak')
 
@@ -148,7 +139,7 @@ def test_safe_save_tmpfile_on_other_filesystem(config_dir, mock):
 
     # simulate tmpfile being on another file-system
     # OSError is caught and handled by shutil.move() used by save_safe()
-    mock.patch('os.rename', side_effect=OSError)
+    mocker.patch('os.rename', side_effect=OSError)
     safe_save(save_file, "Again")
     assert os.path.exists(backup_file)
 
@@ -245,14 +236,14 @@ def test_build_csv_empty_data():
 
 
 def test_build_csv_one_col():
-    lt = csv.get_dialect('excel').lineterminator
+    lt = os.linesep
     data = [{'col': 'value'}, {'col': 'another value'}]
     result = lt.join(['col', 'value', 'another value']) + lt
     assert build_csv(data) == result
 
 
 def test_build_csv_multiple_cols():
-    lt = csv.get_dialect('excel').lineterminator
+    lt = os.linesep
     dm = csv.get_dialect('excel').delimiter
     data = [
         co.OrderedDict([('col1', 'value'),
@@ -268,6 +259,32 @@ def test_build_csv_multiple_cols():
         dm.join(['one value', 'two value', 'three'])
         ]) + lt
     assert build_csv(data) == result
+
+
+# sorted_groupby
+
+def test_sorted_groupby(watson):
+    end = arrow.utcnow()
+    watson.add('foo', end.shift(hours=-25), end.shift(hours=-24), ['A'])
+    watson.add('bar', end.shift(hours=-1), end, ['A'])
+
+    result = list(sorted_groupby(
+        watson.frames,
+        operator.attrgetter('day'),
+        reverse=False))
+    assert result[0][0] < result[1][0]
+
+
+def test_sorted_groupby_reverse(watson):
+    end = arrow.utcnow()
+    watson.add('foo', end.shift(hours=-25), end.shift(hours=-24), ['A'])
+    watson.add('bar', end.shift(hours=-1), end, ['A'])
+
+    result = list(sorted_groupby(
+        watson.frames,
+        operator.attrgetter('day'),
+        reverse=True))
+    assert result[0][0] > result[1][0]
 
 
 # frames_to_csv

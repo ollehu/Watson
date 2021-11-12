@@ -6,30 +6,19 @@ import json
 import operator
 import os
 import shutil
-import sys
 import tempfile
-
-try:
-    from StringIO import StringIO
-except ImportError:
-    from io import StringIO
-
+from io import StringIO
 import click
 import arrow
 
+import watson as _watson
 from .fullmoon import get_last_full_moon
 
 from click.exceptions import UsageError
 
-PY2 = sys.version_info[0] == 2
 
-if not PY2:
-    from builtins import TypeError, isinstance
-
-try:
-    text_type = (str, unicode)
-except NameError:
-    text_type = str
+def create_watson():
+    return _watson.Watson(config_dir=os.environ.get('WATSON_DIR'))
 
 
 def confirm_project(project, watson_projects):
@@ -64,7 +53,7 @@ def style(name, element):
         if not tags:
             return ''
 
-        return u'[{}]'.format(', '.join(
+        return '[{}]'.format(', '.join(
             style('tag', tag) for tag in tags
         ))
 
@@ -177,7 +166,7 @@ def get_frame_from_argument(watson, arg):
             return watson.frames[index]
     except IndexError:
         raise click.ClickException(
-            style('error', u"No frame found for index {}.".format(arg))
+            style('error', "No frame found for index {}.".format(arg))
         )
     except (ValueError, TypeError):
         pass
@@ -186,8 +175,8 @@ def get_frame_from_argument(watson, arg):
     try:
         return watson.frames[arg]
     except KeyError:
-        raise click.ClickException(u"{} {}.".format(
-            style('error', u"No frame found with id"),
+        raise click.ClickException("{} {}.".format(
+            style('error', "No frame found with id"),
             style('short_id', arg))
         )
 
@@ -195,7 +184,7 @@ def get_frame_from_argument(watson, arg):
 def get_start_time_for_period(period, days_offset=0):
     # Using now() from datetime instead of arrow for mocking compatibility.
     now = arrow.Arrow.fromdatetime(datetime.datetime.now())
-    now = now.replace(days=-days_offset)
+    now = now.shift(days=-days_offset)
     date = now.date()
 
     day = date.day
@@ -218,7 +207,7 @@ def get_start_time_for_period(period, days_offset=0):
         # approximately timestamp `0`
         start_time = arrow.Arrow(1970, 1, 1)
     else:
-        raise ValueError(u'Unsupported period value: {}'.format(period))
+        raise ValueError('Unsupported period value: {}'.format(period))
 
     return start_time
 
@@ -247,10 +236,6 @@ def make_json_writer(func, *args, **kwargs):
     """
     def writer(f):
         dump = json.dumps(func(*args, **kwargs), indent=1, ensure_ascii=False)
-        if PY2:
-            # in Python, json.dumps with ensure_ascii=False can return
-            # unicode, but we need to write bytes in the file
-            dump = dump.encode('utf-8')
         f.write(dump)
     return writer
 
@@ -274,7 +259,7 @@ def safe_save(path, content, ext='.bak'):
     tmpfp = tempfile.NamedTemporaryFile(mode='w+', delete=False)
     try:
         with tmpfp:
-            if isinstance(content, text_type):
+            if isinstance(content, str):
                 tmpfp.write(content)
             else:
                 content(tmpfp)
@@ -379,7 +364,7 @@ def build_csv(entries):
     else:
         return ''
     memfile = StringIO()
-    writer = csv.DictWriter(memfile, header)
+    writer = csv.DictWriter(memfile, header, lineterminator=os.linesep)
     writer.writeheader()
     writer.writerows(entries)
     output = memfile.getvalue()

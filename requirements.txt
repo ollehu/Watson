@@ -1,4 +1,5 @@
-arrow!=0.11,!=0.12.0
-click
+arrow>=1.0.0
+click>=7.0,<8.0
 click-didyoumean
+colorama; sys_platform == "win32"
 requests

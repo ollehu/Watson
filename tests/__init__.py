@@ -1,16 +1,18 @@
 """Utility functions for the unit tests."""
 
+import os
 import datetime
+import mock
+from io import StringIO
 
-try:
-    from unittest import mock
-except ImportError:
-    import mock
+import py
 
-try:
-    from StringIO import StringIO
-except ImportError:
-    from io import StringIO
+
+TEST_FIXTURE_DIR = py.path.local(
+    os.path.dirname(
+        os.path.realpath(__file__)
+        )
+    ) / 'resources'
 
 
 def mock_datetime(dt, dt_module):

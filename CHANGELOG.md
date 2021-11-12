@@ -9,14 +9,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The restart command now accepts the `--gap/--no-gap` options.
+
+## [2.0.1] - 2021-05-10
+
+### Fixed
+
+- Ability to `edit` the current frame (#418)
+
+## [2.0.0] - 2021-03-19
+
+### Added
+
+- The `log` command output can now be filtered to exclude projects and tags via
+  `--ignore-project` and `--ignore-tag` (#395)
+- Python 3.8 support (#402)
+- Python 3.9 support (#402)
+- Support for the TZ environment variable to specify the local time zone (#391)
+
+### Changed
+
+- Upgrade to major arrow release 1.0.0 (#407)
+
+### Fixed
+
+- Zsh completion (#379)
+
+### Removed
+
+- Python 2.7 support (#305).
+- Python 3.5 support (#407).
+
+## [1.10.0] - 2020-07-03
+
+### Added
+
+- Log output order can now be controlled via the `--reverse/--no-reverse` flag
+  and the `reverse_log` configuration option (#369)
+- Add `--at` flag to the `start` and `restart` commands (#364).
+- Add `--color` and `--no-color` flags to force output to be colored or not
+  respectively (#350).
+
+### Changed
+
+- Require latest Arrow version 0.15.6 to support ISO week dates (#380)
+
+### Fixed
+
+- Make after-edit-check ensure that edited time stamps are not in the future
+  (#381)
+
+## [1.9.0] - 2020-05-27
+
+### Added
+
 - Improve Arrow 0.15.0 support after changes in `arrow.get()` behavior (#296)
 - Watson now suggests correct command if users make small typo (#318)
+
+### Changed
+
+- Always show total time at bottom of report (#356)
+- Use the default system newline character for CSV output (#366).
 
 ### Fixed
 
 - Stylize prompt to create new project or tag (#310).
 - Aggregate calculates wrong time if used with `--current` (#293)
 - The `start` command now correctly checks if project is empty (#322)
+- Aggregate ignores frames that crosses aggregate boundary (#248)
 - The `report` and `aggregate` commands with `--json` option now correctly
   encode Arrow objects (#329)
 
@@ -223,7 +283,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 First stable public release 🎉
 
-[unreleased]: https://github.com/tailordev/watson/compare/1.8.0...HEAD
+[unreleased]: https://github.com/tailordev/watson/compare/2.0.1...HEAD
+[2.0.1]: https://github.com/tailordev/watson/compare/2.0.0...2.0.1
+[2.0.0]: https://github.com/tailordev/watson/compare/1.10.0...2.0.0
+[1.10.0]: https://github.com/tailordev/watson/compare/1.9.0...1.10.0
+[1.9.0]: https://github.com/tailordev/watson/compare/1.8.0...1.9.0
 [1.8.0]: https://github.com/tailordev/watson/compare/1.7.0...1.8.0
 [1.7.0]: https://github.com/tailordev/watson/compare/1.6.0...1.7.0
 [1.6.0]: https://github.com/tailordev/watson/compare/1.5.2...1.6.0

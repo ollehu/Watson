@@ -8,7 +8,7 @@ Watson configuration and data are stored inside your user's application folder. 
 * **Windows**: `%appdata%\watson\config`, which usually expands to `C:\Users\<user>\AppData\Roaming\watson\config`
 * **Linux**: `~/.config/watson/config`
 
-The configuration file is a typical [python configuration (INI) file](https://docs.python.org/3.7/library/configparser.html#supported-ini-file-structure), that looks like:
+The configuration file is a typical [python configuration (INI) file](https://docs.python.org/3.9/library/configparser.html#supported-ini-file-structure), that looks like:
 
 ```ini
 [Simple Values]
@@ -55,7 +55,7 @@ empty string value here =
         # Did I mention we can indent comments, too?
 ```
 
-_This example configuration file has been taken from the [official python documentation](https://docs.python.org/3.7/library/configparser.html#supported-ini-file-structure)._
+_This example configuration file has been taken from the [official python documentation](https://docs.python.org/3.9/library/configparser.html#supported-ini-file-structure)._
 
 
 ## Editing
@@ -128,6 +128,13 @@ in colour, but `log` or `report` do not, try disabling the pager.
 If `true`, the output of the `report` command will include the currently
 running frame (if any) by default. The option can be overridden on the
 command line with the `-c/-C` resp. `--current/--no-current` flags.
+
+#### `options.reverse_log` (default: `true`)
+
+If `true`, the output of the `log` command will reverse the order of the days
+to display the latest day's entries on top and the oldest day's entries at the
+bottom. The option can be overridden on the command line with the `-r/-R` resp.
+`--reverse/--no-reverse` flags.
 
 #### `options.stop_on_start` (default: `false`)
 
@@ -230,6 +237,7 @@ week_start = monday
 log_current = false
 pager = true
 report_current = false
+reverse_log = true
 ```
 
 ## Application folder
