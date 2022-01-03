@@ -919,8 +919,8 @@ def aggregate(ctx, watson, current, from_, to, projects, tags, output_format,
               mutually_exclusive=_SHORTCUT_OPTIONS,
               help="The date at which the report should stop (inclusive). "
               "Defaults to tomorrow.")
-@click.option('-l', '--last-week', 'last_week', is_flag=True,
-              help="Get last weeks visma report.")
+@click.option('-l', '--last-week', 'last_week', required=False, type=int,
+              default=0, help="Get last weeks visma report.")
 @click.pass_obj
 def visma_report(watson, from_, to, last_week):
     """
@@ -928,10 +928,7 @@ def visma_report(watson, from_, to, last_week):
     for the current week.
     """
 
-    if last_week:
-        delay = 7
-    else:
-        delay = 0
+    delay = 7 * last_week
     week = get_start_time_for_period('week', days_offset=delay)
 
     to = week.shift(days=+6) if last_week else to
